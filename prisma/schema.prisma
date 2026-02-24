@@ -1,0 +1,202 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ─────────────────────────────────────────
+// AUTH & USERS
+// ─────────────────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String    @unique
+  emailVerified DateTime?
+  image         String?
+  password      String?
+  role          String    @default("USER") // "USER" | "MUSICIAN" | "ADMIN"
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+
+  musician Musician?
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ─────────────────────────────────────────
+// MUSICIAN PROFILE
+// ─────────────────────────────────────────
+
+model Musician {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  displayName String
+  bio         String?
+  avatarUrl   String?
+  status      String   @default("PENDING") // "PENDING" | "APPROVED" | "SUSPENDED"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tracks Track[]
+  stages Stage[]
+}
+
+// ─────────────────────────────────────────
+// MUSIC TRACKS
+// ─────────────────────────────────────────
+
+model Track {
+  id         String  @id @default(cuid())
+  musicianId String
+  title      String
+  artist     String
+  duration   Float?
+  fileUrl    String
+  mimeType   String
+  fileSize   Int
+  status     String  @default("PROCESSING") // "PROCESSING" | "READY" | "ERROR"
+
+  bpm          Float?
+  key          String?
+  energy       Float?
+  analysisJson String?
+
+  aiDescription String?
+  aiMoodTags    String? // JSON array string
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  musician        Musician     @relation(fields: [musicianId], references: [id])
+  stageTrackLinks StageTrack[]
+}
+
+// ─────────────────────────────────────────
+// STAGES (GPS-anchored performance spaces)
+// ─────────────────────────────────────────
+
+model Stage {
+  id          String  @id @default(cuid())
+  musicianId  String
+  name        String
+  description String?
+
+  latitude  Float
+  longitude Float
+  altitude  Float @default(0)
+  radius    Float @default(50) // detection radius in meters
+
+  isActive Boolean @default(true)
+  isPublic Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  musician        Musician        @relation(fields: [musicianId], references: [id])
+  visualizations  Visualization[]
+  stageTrackLinks StageTrack[]
+}
+
+model StageTrack {
+  id        String @id @default(cuid())
+  stageId   String
+  trackId   String
+  sortOrder Int    @default(0)
+  loopMode  String @default("single") // "single" | "playlist" | "shuffle"
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  track Track @relation(fields: [trackId], references: [id], onDelete: Cascade)
+
+  @@unique([stageId, trackId])
+}
+
+// ─────────────────────────────────────────
+// AR VISUALIZATIONS
+// ─────────────────────────────────────────
+
+model Visualization {
+  id      String @id @default(cuid())
+  stageId String
+  name    String
+
+  // type: PARTICLE_SYSTEM | GEOMETRY_PULSE | WAVEFORM_RIBBON |
+  //       FREQUENCY_BARS | SHADER_EFFECT | GLTF_ANIMATOR | LIGHT_SHOW
+  type String
+
+  // Position relative to stage GPS anchor (meters, ENU space)
+  offsetX Float @default(0)
+  offsetY Float @default(0)
+  offsetZ Float @default(0)
+
+  // Euler rotation (radians)
+  rotationX Float @default(0)
+  rotationY Float @default(0)
+  rotationZ Float @default(0)
+
+  // Scale
+  scaleX Float @default(1)
+  scaleY Float @default(1)
+  scaleZ Float @default(1)
+
+  // Type-specific JSON config (see src/types/ar.ts for per-type shape)
+  configJson String
+
+  // Optional 3D asset URL (for GLTF_ANIMATOR type)
+  assetUrl String?
+
+  // Audio reactivity mapping
+  reactToFrequency String @default("bass") // "bass" | "mid" | "treble" | "all"
+  reactIntensity   Float  @default(1.0)
+
+  // Claude AI provenance
+  aiPrompt String?
+
+  sortOrder Int     @default(0)
+  isVisible Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}

@@ -1,0 +1,63 @@
+const EARTH_RADIUS_M = 6_371_000;
+
+/**
+ * Haversine formula — returns distance in meters between two GPS coords.
+ */
+export function haversine(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return EARTH_RADIUS_M * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Convert a GPS delta to a 3D position in ENU (East-North-Up) local space.
+ *
+ * The user's current position is the world origin (0, 0, 0).
+ * Three.js coordinate mapping:
+ *   East  → +X
+ *   Up    → +Y
+ *   North → -Z  (Three.js is right-handed with Z pointing toward viewer)
+ */
+export function gpsToWorldPosition(
+  userLat: number,
+  userLng: number,
+  stageLat: number,
+  stageLng: number,
+  stageAltitude: number = 0
+): { x: number; y: number; z: number } {
+  const dLat = ((stageLat - userLat) * Math.PI) / 180;
+  const dLng = ((stageLng - userLng) * Math.PI) / 180;
+
+  const north = dLat * EARTH_RADIUS_M;
+  const east =
+    dLng * EARTH_RADIUS_M * Math.cos((userLat * Math.PI) / 180);
+
+  return { x: east, y: stageAltitude, z: -north };
+}
+
+/**
+ * Bearing in degrees (0 = North, 90 = East) from point A to point B.
+ */
+export function bearing(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const dLng = toRad(lng2 - lng1);
+  const y = Math.sin(dLng) * Math.cos(toRad(lat2));
+  const x =
+    Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+    Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(dLng);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+}
