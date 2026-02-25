@@ -20,7 +20,7 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className={`${mono.variable} font-mono bg-black text-white antialiased`}>
         {children}
         <Toaster position="top-center" theme="dark" />
