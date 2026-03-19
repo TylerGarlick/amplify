@@ -7,14 +7,20 @@ import { toast } from "sonner";
 import type WaveSurfer from "wavesurfer.js";
 
 interface TrackUploadResult {
+  /** Database track ID */
+  id: string;
   fileUrl: string;
   mimeType: string;
   fileSize: number;
   originalName: string;
+  /** Extracted duration in seconds (may be null before analysis) */
+  duration: number | null;
+  /** Current processing status */
+  status: "PROCESSING" | "READY" | "ERROR";
 }
 
 interface TrackUploadProps {
-  onTrackUploaded?: (track: TrackUploadResult) => void;
+  onTrackUploaded?: (track: TrackUploadResult | null) => void;
   maxSizeMB?: number;
   accept?: string;
 }
@@ -162,6 +168,9 @@ export function TrackUpload({
     try {
       const formData = new FormData();
       formData.append("file", file);
+      // Tell the pipeline to skip AI analysis — the component will call it
+      // after the user fills in title/artist (or it's handled by the new-track page)
+      formData.append("autoAnalyze", "false");
 
       const res = await fetch("/api/tracks/upload", {
         method: "POST",
@@ -177,18 +186,23 @@ export function TrackUpload({
       }
 
       const { data } = await res.json();
+
+      // Build the TrackUploadResult from the pipeline response
       const trackData: TrackUploadResult = {
+        id: data.track.id,
         fileUrl: data.fileUrl,
-        mimeType: data.mimeType,
-        fileSize: data.fileSize,
-        originalName: data.originalName,
+        mimeType: data.track.mimeType,
+        fileSize: data.track.fileSize,
+        originalName: file.name,
+        duration: data.metadata?.duration ?? null,
+        status: data.track.status as TrackUploadResult["status"],
       };
 
       setUploadedTrack(trackData);
       onTrackUploaded?.(trackData);
-      toast.success("Track uploaded successfully!");
+      toast.success("Track uploaded! Fill in details to save it.");
 
-      // Generate waveform after upload
+      // Generate waveform for preview
       await generateWaveform(file);
     } catch (err) {
       setProgress(0);
