@@ -3,7 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { MapPin, Eye, Radio, Plus, ArrowLeft, Music } from "lucide-react";
+import { MapPin, Eye, Plus, ArrowLeft } from "lucide-react";
+import { StageTracksSection } from "@/components/stages/StageTracksSection";
 
 export default async function StageDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -51,34 +52,8 @@ export default async function StageDetailPage({ params }: { params: Promise<{ id
         </Link>
       </div>
 
-      {/* Tracks */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs text-zinc-500 uppercase tracking-widest flex items-center gap-1.5">
-            <Radio className="w-3 h-3" /> Tracks ({stage.stageTrackLinks.length})
-          </h2>
-        </div>
-        {stage.stageTrackLinks.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-zinc-800 p-8 text-center text-zinc-600 text-sm">
-            No tracks linked. Go to the Visualize editor to link a track.
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {stage.stageTrackLinks.map((link) => (
-              <div key={link.id} className="flex items-center gap-3 p-3 rounded-lg bg-zinc-900 border border-zinc-800">
-                <Music className="w-4 h-4 text-violet-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-white truncate">{link.track.title}</p>
-                  <p className="text-xs text-zinc-500">{link.track.artist}</p>
-                </div>
-                {link.track.bpm && (
-                  <span className="text-xs text-zinc-600 font-mono">{Math.round(link.track.bpm)} BPM</span>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Tracks — client component with upload support */}
+      <StageTracksSection stage={stage} />
 
       {/* Visualizations */}
       <div>
