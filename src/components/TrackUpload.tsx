@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Upload, Music, Loader2, CheckCircle, XCircle, AudioLines } from "lucide-react";
+import { Upload, Music, Loader2, CheckCircle, XCircle, AudioLines, Play, Pause } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
+import type WaveSurfer from "wavesurfer.js";
 
 interface TrackUploadResult {
   fileUrl: string;
@@ -38,29 +39,110 @@ export function TrackUpload({
   const [uploading, setUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [uploadedTrack, setUploadedTrack] = useState<TrackUploadResult | null>(null);
-  const [waveformData, setWaveformData] = useState<number[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isGeneratingWaveform, setIsGeneratingWaveform] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const waveformRef = useRef<HTMLDivElement>(null);
+  const wavesurferRef = useRef<WaveSurfer | null>(null);
+  const audioUrlRef = useRef<string | null>(null);
 
-  const generateWaveform = useCallback(() => {
-    const bars = 64;
-    const data: number[] = [];
-    for (let i = 0; i < bars; i++) {
-      const x = i / bars;
-      const envelope = Math.sin(x * Math.PI);
-      const noise = Math.random() * 0.5 + 0.5;
-      const beat = Math.sin(i / 8) * 0.3 + 0.7;
-      data.push(Math.min(1, envelope * noise * beat + 0.2));
-    }
-    return data;
+  // Cleanup wavesurfer on unmount
+  useEffect(() => {
+    return () => {
+      if (wavesurferRef.current) {
+        wavesurferRef.current.destroy();
+      }
+      if (audioUrlRef.current) {
+        URL.revokeObjectURL(audioUrlRef.current);
+      }
+    };
   }, []);
 
-  useEffect(() => {
-    if (uploadedTrack) {
-      setWaveformData(generateWaveform());
+  // Generate waveform using WaveSurfer.js
+  const generateWaveform = useCallback(async (file: File) => {
+    if (!waveformRef.current) return;
+
+    setIsGeneratingWaveform(true);
+
+    // Cleanup previous instance
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+      wavesurferRef.current = null;
     }
-  }, [uploadedTrack, generateWaveform]);
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+    }
+
+    try {
+      // Dynamic import to avoid SSR issues
+      const WaveSurfer = (await import("wavesurfer.js")).default;
+
+      // Create object URL for the file
+      const audioUrl = URL.createObjectURL(file);
+      audioUrlRef.current = audioUrl;
+
+      // Create wavesurfer instance
+      const wavesurfer = WaveSurfer.create({
+        container: waveformRef.current,
+        waveColor: "#7c3aed", // violet-600
+        progressColor: "#ec4899", // pink-500
+        cursorColor: "#ffffff",
+        cursorWidth: 2,
+        barWidth: 2,
+        barGap: 1,
+        barRadius: 2,
+        height: 64,
+        normalize: true,
+        backend: "WebAudio",
+        mediaControls: false,
+        interact: true,
+        hideScrollbar: true,
+      });
+
+      wavesurferRef.current = wavesurfer;
+
+      // Handle ready state
+      await new Promise<void>((resolve, reject) => {
+        wavesurfer.on("ready", () => {
+          setIsGeneratingWaveform(false);
+          resolve();
+        });
+        wavesurfer.on("error", (err) => {
+          setIsGeneratingWaveform(false);
+          reject(err);
+        });
+        wavesurfer.load(audioUrl);
+      });
+
+      // Handle playback state
+      wavesurfer.on("play", () => setIsPlaying(true));
+      wavesurfer.on("pause", () => setIsPlaying(false));
+
+      // Playback controls for the mini player
+      const container = waveformRef.current.parentElement;
+      if (container) {
+        const playBtn = container.querySelector("[data-play-button]");
+        if (playBtn) {
+          playBtn.addEventListener("click", () => {
+            wavesurfer.playPause();
+          });
+        }
+      }
+    } catch (err) {
+      console.error("Waveform generation failed:", err);
+      setIsGeneratingWaveform(false);
+      toast.warning("Could not generate waveform visualization");
+    }
+  }, []);
+
+  // Handle play/pause toggle
+  const togglePlayback = useCallback(() => {
+    if (wavesurferRef.current) {
+      wavesurferRef.current.playPause();
+    }
+  }, []);
 
   async function uploadFile(file: File) {
     setError(null);
@@ -105,6 +187,9 @@ export function TrackUpload({
       setUploadedTrack(trackData);
       onTrackUploaded?.(trackData);
       toast.success("Track uploaded successfully!");
+
+      // Generate waveform after upload
+      await generateWaveform(file);
     } catch (err) {
       setProgress(0);
       const message = err instanceof Error ? err.message : "Upload failed";
@@ -164,9 +249,18 @@ export function TrackUpload({
   }
 
   function handleRemove() {
+    // Cleanup wavesurfer
+    if (wavesurferRef.current) {
+      wavesurferRef.current.destroy();
+      wavesurferRef.current = null;
+    }
+    if (audioUrlRef.current) {
+      URL.revokeObjectURL(audioUrlRef.current);
+      audioUrlRef.current = null;
+    }
     setUploadedTrack(null);
-    setWaveformData([]);
     setError(null);
+    setIsPlaying(false);
     onTrackUploaded?.(null as any);
   }
 
@@ -199,25 +293,40 @@ export function TrackUpload({
           </button>
         </div>
 
-        {/* Waveform visualization */}
-        <div className="h-16 flex items-end justify-center gap-[2px] px-2">
-          {waveformData.map((height, i) => (
-            <div
-              key={i}
-              className="w-1 bg-gradient-to-t from-violet-600 to-pink-500 rounded-t"
-              style={{
-                height: `${height * 100}%`,
-                opacity: 0.7 + height * 0.3,
-              }}
-            />
-          ))}
+        {/* Waveform visualization with WaveSurfer.js */}
+        <div className="relative">
+          {isGeneratingWaveform ? (
+            <div className="h-16 flex items-center justify-center gap-2 bg-zinc-800/30 rounded-lg">
+              <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
+              <span className="text-xs text-zinc-500">Generating waveform…</span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                data-play-button
+                onClick={togglePlayback}
+                className="flex-shrink-0 w-8 h-8 rounded-full bg-violet-600 hover:bg-violet-500 flex items-center justify-center transition-colors"
+              >
+                {isPlaying ? (
+                  <Pause className="w-4 h-4 text-white" />
+                ) : (
+                  <Play className="w-4 h-4 text-white ml-0.5" />
+                )}
+              </button>
+              <div ref={waveformRef} className="flex-1" />
+            </div>
+          )}
         </div>
 
-        <audio
-          controls
-          className="w-full h-8 mt-2"
-          src={uploadedTrack.fileUrl}
-        />
+        {/* Fallback audio element for browsers without WebAudio */}
+        {uploadedTrack.fileUrl && !isGeneratingWaveform && (
+          <audio
+            controls
+            className="w-full h-8 mt-1"
+            src={uploadedTrack.fileUrl}
+            preload="metadata"
+          />
+        )}
       </div>
     );
   }

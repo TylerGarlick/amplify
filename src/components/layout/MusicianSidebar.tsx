@@ -2,13 +2,15 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, Music, MapPin, Sparkles, ChevronLeft } from "lucide-react";
+import { LayoutDashboard, Music, MapPin, Sparkles, ChevronLeft, Activity } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/musician", label: "Dashboard", Icon: LayoutDashboard, exact: true },
   { href: "/musician/tracks", label: "Tracks", Icon: Music },
   { href: "/musician/stages", label: "Stages", Icon: MapPin },
+  { href: "/musician/enhancements", label: "Enhancements", Icon: Sparkles },
+  { href: "/musician/audio-demo", label: "Audio Demo", Icon: Activity },
   { href: "/musician/ai-studio", label: "AI Studio", Icon: Sparkles },
 ];
 

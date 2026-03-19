@@ -1,35 +1,121 @@
-import type { Metadata } from "next";
-import { prisma } from "@/lib/prisma";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { MapPin, Radio, Music } from "lucide-react";
+import { MapPin, Radio, Music, Navigation, Loader2, Map } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
-export const metadata: Metadata = { title: "Explore — Amplify" };
+interface Stage {
+  id: string;
+  name: string;
+  description: string | null;
+  latitude: number;
+  longitude: number;
+  radius: number;
+  isActive: boolean;
+  isPublic: boolean;
+  musician: { displayName: string };
+  visualizations: { id: string }[];
+  stageTrackLinks: { track: { title: string; artist: string } }[];
+  distance?: number;
+}
 
-export default async function ExplorePage() {
-  const stages = await prisma.stage.findMany({
-    where: { isActive: true, isPublic: true },
-    include: {
-      musician: { select: { displayName: true } },
-      visualizations: { select: { id: true } },
-      stageTrackLinks: {
-        take: 1,
-        orderBy: { sortOrder: "asc" },
-        include: { track: { select: { title: true, artist: true } } },
+export default function ExplorePage() {
+  const searchParams = useSearchParams();
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
+  const [locationLoading, setLocationLoading] = useState(false);
+  const [showNearby, setShowNearby] = useState(false);
+
+  useEffect(() => {
+    fetchStages();
+  }, [searchParams]);
+
+  async function fetchStages() {
+    setLoading(true);
+    const params = new URLSearchParams();
+    
+    if (userLat && userLng) {
+      params.set("latitude", userLat.toString());
+      params.set("longitude", userLng.toString());
+      params.set("radius", "10000"); // 10km default
+    }
+
+    try {
+      const res = await fetch(`/api/stages?${params.toString()}`);
+      const data = await res.json();
+      setStages(data.data || []);
+    } catch (err) {
+      console.error("Failed to fetch stages:", err);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleUseMyLocation() {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setLocationLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setUserLat(pos.coords.latitude);
+        setUserLng(pos.coords.longitude);
+        setShowNearby(true);
+        setLocationLoading(false);
       },
-    },
-    orderBy: { createdAt: "desc" },
-    take: 50,
-  });
+      (err) => {
+        alert(`Could not get location: ${err.message}`);
+        setLocationLoading(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  }
+
+  function clearLocation() {
+    setUserLat(null);
+    setUserLng(null);
+    setShowNearby(false);
+  }
 
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
       <div className="sticky top-0 z-10 bg-black/80 backdrop-blur-xl border-b border-zinc-800/50 px-4 py-4">
-        <div className="flex items-center gap-2">
-          <MapPin className="w-5 h-5 text-violet-400" />
-          <h1 className="text-lg font-bold text-white tracking-tight">Discover Stages</h1>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-violet-400" />
+              <h1 className="text-lg font-bold text-white tracking-tight">Discover Stages</h1>
+            </div>
+            <p className="text-xs text-zinc-500 mt-0.5">
+              {showNearby && userLat ? "Nearby stages" : `${stages.length} active stages worldwide`}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className={`h-8 text-xs border-zinc-700 ${showNearby ? "bg-violet-600/20 text-violet-400 border-violet-800" : "bg-zinc-800 text-zinc-300"}`}
+              onClick={showNearby ? clearLocation : handleUseMyLocation}
+              disabled={locationLoading}
+            >
+              {locationLoading ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : showNearby ? (
+                <MapPin className="w-3 h-3 mr-1" />
+              ) : (
+                <Navigation className="w-3 h-3 mr-1" />
+              )}
+              {showNearby ? "Clear" : "Near Me"}
+            </Button>
+          </div>
         </div>
-        <p className="text-xs text-zinc-500 mt-0.5">{stages.length} active stages worldwide</p>
       </div>
 
       {/* Map placeholder */}
@@ -64,11 +150,18 @@ export default async function ExplorePage() {
 
       {/* Stage list */}
       <div className="p-4 space-y-3">
-        {stages.length === 0 ? (
+        {loading ? (
+          <div className="text-center py-16">
+            <Loader2 className="w-8 h-8 mx-auto mb-3 text-violet-500 animate-spin" />
+            <p className="text-sm text-zinc-500">Loading stages...</p>
+          </div>
+        ) : stages.length === 0 ? (
           <div className="text-center py-16 text-zinc-600">
             <Radio className="w-10 h-10 mx-auto mb-3 opacity-30" />
-            <p className="text-sm">No stages yet.</p>
-            <p className="text-xs mt-1">Musicians will create stages at venues.</p>
+            <p className="text-sm">No stages found.</p>
+            <p className="text-xs mt-1">
+              {showNearby ? "No stages within 10km. Try a different location." : "Musicians will create stages at venues."}
+            </p>
           </div>
         ) : (
           stages.map((stage) => (
@@ -103,6 +196,13 @@ export default async function ExplorePage() {
                 <span className="text-[10px] text-zinc-600 font-mono">
                   {stage.latitude.toFixed(4)}, {stage.longitude.toFixed(4)}
                 </span>
+                {stage.distance !== undefined && (
+                  <span className="text-[10px] text-violet-400 ml-2">
+                    {stage.distance < 1000
+                      ? `${Math.round(stage.distance)}m`
+                      : `${(stage.distance / 1000).toFixed(1)}km`}
+                  </span>
+                )}
               </div>
             </div>
           ))

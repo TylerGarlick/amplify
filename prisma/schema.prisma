@@ -25,7 +25,9 @@ model User {
   accounts Account[]
   sessions Session[]
 
-  musician Musician?
+  musician    Musician?
+  tribeMember TribeMember[]
+  watchSessions LocationWatch[]
 }
 
 model Account {
@@ -136,6 +138,10 @@ model Stage {
   musician        Musician        @relation(fields: [musicianId], references: [id])
   visualizations  Visualization[]
   stageTrackLinks StageTrack[]
+  stageElements   StageElement[]
+  territory       Territory?
+  watchSessions   LocationWatch[]
+  enhancements    LocationEnhancement[]
 }
 
 model StageTrack {
@@ -199,4 +205,152 @@ model Visualization {
   updatedAt DateTime @updatedAt
 
   stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────
+// STAGE ELEMENTS (3D AR Stage Builder)
+// ─────────────────────────────────────────
+
+model StageElement {
+  id      String @id @default(cuid())
+  stageId String
+  type    String // "platform" | "speaker" | "light" | "screen" | "crowd"
+  name    String
+
+  // Position (meters, ENU space)
+  positionX Float @default(0)
+  positionY Float @default(0)
+  positionZ Float @default(0)
+
+  // Rotation (radians)
+  rotationX Float @default(0)
+  rotationY Float @default(0)
+  rotationZ Float @default(0)
+
+  // Scale
+  scaleX Float @default(1)
+  scaleY Float @default(1)
+  scaleZ Float @default(1)
+
+  // Color (hex)
+  color String @default("#6b7280")
+
+  // Type-specific JSON config
+  configJson String @default("{}")
+
+  // Visibility
+  isVisible Boolean @default(true)
+
+  // Audio reactivity
+  reactToFrequency String @default("bass")
+  reactIntensity   Float  @default(1.0)
+
+  sortOrder Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}
+
+// ─────────────────────────────────────────
+// MUSIC TRIBE TERRITORY SYSTEM
+// ─────────────────────────────────────────
+
+// Tribes represent music genres/fan communities
+model Tribe {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  genre       String
+  color       String   @default("#8B5CF6") // Violet default
+  logo        String?
+  description String?
+  isOfficial  Boolean  @default(false) // Official genres vs fan-created
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members      TribeMember[]
+  territories  Territory[]
+  enhancements LocationEnhancement[]
+}
+
+// Users belong to a tribe
+model TribeMember {
+  id        String   @id @default(cuid())
+  userId    String
+  tribeId   String
+  role      String   @default("MEMBER") // "MEMBER" | "LEADER" | "CAPTAIN"
+  joinedAt  DateTime @default(now())
+
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tribe Tribe @relation(fields: [tribeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tribeId])
+}
+
+// Territories are GPS locations controlled by tribes
+model Territory {
+  id              String   @id @default(cuid())
+  stageId         String   @unique
+  name            String
+  latitude        Float
+  longitude       Float
+  
+  // Current owning tribe (null = unclaimed)
+  owningTribeId   String?
+  
+  // Influence scores stored as JSON: { "tribeId": score, ... }
+  influenceJson   String   @default("{}")
+  
+  lastCaptureTime DateTime?
+  
+  // Is this territory enhanced?
+  isEnhanced      Boolean  @default(false)
+  enhancedByTribeId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  stage         Stage               @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  owningTribe   Tribe?              @relation(fields: [owningTribeId], references: [id])
+  watchSessions LocationWatch[]
+}
+
+// Tracks user watch sessions at locations
+model LocationWatch {
+  id          String   @id @default(cuid())
+  userId      String
+  territoryId String
+  stageId     String
+  
+  // Duration in seconds
+  watchTimeSeconds Int     @default(0)
+  
+  // Whether this session counted towards influence (met minimum duration)
+  counted Boolean @default(false)
+  
+  lastWatched DateTime @default(now())
+  
+  // Session started at
+  sessionStart DateTime @default(now())
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  territory Territory @relation(fields: [territoryId], references: [id], onDelete: Cascade)
+  stage     Stage     @relation(fields: [stageId], references: [id], onDelete: Cascade)
+}
+
+// Musicians can apply to enhance their stages
+model LocationEnhancement {
+  id          String   @id @default(cuid())
+  stageId     String
+  tribeId     String
+  status      String   @default("PENDING") // "PENDING" | "APPROVED" | "REJECTED"
+  appliedAt   DateTime @default(now())
+  reviewedAt DateTime?
+  
+  // 2x multiplier for this tribe at this location
+  multiplier  Float    @default(2.0)
+
+  stage Stage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  tribe Tribe @relation(fields: [tribeId], references: [id], onDelete: Cascade)
 }

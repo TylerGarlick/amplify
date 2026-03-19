@@ -6,7 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, UserPlus, Music } from "lucide-react";
 import { toast } from "sonner";
 
 export default function RegisterPage() {
@@ -103,6 +103,19 @@ export default function RegisterPage() {
           {loading ? "Creating account…" : "Create account"}
         </Button>
       </form>
+
+      <div className="mt-6 pt-6 border-t border-zinc-800">
+        <p className="text-center text-sm text-zinc-500 mb-3">
+          Are you a musician?
+        </p>
+        <Link
+          href="/register/musician"
+          className="flex items-center justify-center gap-2 w-full h-11 bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-300 hover:text-white font-medium transition-colors"
+        >
+          <Music className="w-4 h-4" />
+          Apply as Musician
+        </Link>
+      </div>
 
       <p className="mt-6 text-center text-sm text-zinc-500">
         Already have an account?{" "}

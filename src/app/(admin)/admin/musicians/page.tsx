@@ -5,7 +5,7 @@ export default async function AdminMusiciansPage() {
   const musicians = await prisma.musician.findMany({
     orderBy: { createdAt: "desc" },
     include: {
-      user: { select: { email: true, name: true } },
+      user: { select: { id: true, email: true, name: true } },
       _count: { select: { tracks: true, stages: true } },
     },
   });

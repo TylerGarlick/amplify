@@ -1,30 +1,32 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
-import { MapPin, Navigation, Loader2, CheckCircle } from "lucide-react";
+import { MapPin, Navigation, Loader2, CheckCircle, Map } from "lucide-react";
 import { toast } from "sonner";
+import { MapPicker } from "@/components/stages/MapPicker";
 
 export default function NewStagePage() {
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
-  const [lat, setLat] = useState("");
-  const [lng, setLng] = useState("");
+  const [lat, setLat] = useState<number | "">("");
+  const [lng, setLng] = useState<number | "">("");
   const [radius, setRadius] = useState([50]);
   const [loading, setLoading] = useState(false);
   const [locating, setLocating] = useState(false);
+  const [showMap, setShowMap] = useState(false);
 
   function useMyLocation() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setLat(pos.coords.latitude.toFixed(6));
-        setLng(pos.coords.longitude.toFixed(6));
+        setLat(pos.coords.latitude);
+        setLng(pos.coords.longitude);
         setLocating(false);
         toast.success("Location captured!");
       },
@@ -34,6 +36,31 @@ export default function NewStagePage() {
       },
       { enableHighAccuracy: true }
     );
+  }
+
+  // Initialize with current location or default
+  useEffect(() => {
+    if (!lat && !lng && navigator.geolocation) {
+      setLocating(true);
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setLat(pos.coords.latitude);
+          setLng(pos.coords.longitude);
+          setLocating(false);
+        },
+        () => {
+          // Default to SF if geolocation fails
+          setLat(37.7749);
+          setLng(-122.4194);
+          setLocating(false);
+        }
+      );
+    }
+  }, []);
+
+  function handleLocationChange(newLat: number, newLng: number) {
+    setLat(newLat);
+    setLng(newLng);
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,8 +74,8 @@ export default function NewStagePage() {
       body: JSON.stringify({
         name: name.trim(),
         description: description.trim() || undefined,
-        latitude: parseFloat(lat),
-        longitude: parseFloat(lng),
+        latitude: lat,
+        longitude: lng,
         radius: radius[0],
       }),
     });
@@ -99,19 +126,42 @@ export default function NewStagePage() {
             <Label className="text-zinc-300 text-xs tracking-wider uppercase flex items-center gap-1.5">
               <MapPin className="w-3 h-3" /> Location
             </Label>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="h-7 text-xs border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-              onClick={useMyLocation}
-              disabled={locating}
-            >
-              {locating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Navigation className="w-3 h-3 mr-1" />}
-              Use My Location
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className={`h-7 text-xs ${showMap ? 'bg-violet-600/20 text-violet-400' : 'text-zinc-400'}`}
+                onClick={() => setShowMap(!showMap)}
+              >
+                <Map className="w-3 h-3 mr-1" />
+                {showMap ? "Hide Map" : "Show Map"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                onClick={useMyLocation}
+                disabled={locating}
+              >
+                {locating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Navigation className="w-3 h-3 mr-1" />}
+                Use My Location
+              </Button>
+            </div>
           </div>
 
+          {/* Map Picker */}
+          {showMap && lat && lng && (
+            <MapPicker
+              latitude={lat}
+              longitude={lng}
+              onLocationChange={handleLocationChange}
+              radius={radius[0]}
+            />
+          )}
+
+          {/* Manual coordinates input */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label className="text-xs text-zinc-500">Latitude</Label>
@@ -119,7 +169,7 @@ export default function NewStagePage() {
                 type="number"
                 step="any"
                 value={lat}
-                onChange={(e) => setLat(e.target.value)}
+                onChange={(e) => setLat(e.target.value ? parseFloat(e.target.value) : "")}
                 placeholder="37.7749"
                 required
                 className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-600 h-10 text-sm font-mono"
@@ -131,7 +181,7 @@ export default function NewStagePage() {
                 type="number"
                 step="any"
                 value={lng}
-                onChange={(e) => setLng(e.target.value)}
+                onChange={(e) => setLng(e.target.value ? parseFloat(e.target.value) : "")}
                 placeholder="-122.4194"
                 required
                 className="bg-zinc-800 border-zinc-700 text-white placeholder:text-zinc-600 h-10 text-sm font-mono"

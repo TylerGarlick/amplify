@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 
 interface MusicianRow {
   id: string;
+  userId: string;
   displayName: string;
   status: string;
   createdAt: Date;
@@ -29,7 +30,7 @@ export function MusiciansAdminClient({ musicians: initial }: { musicians: Musici
     const res = await fetch("/api/admin/approve-musician", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ userId, suspend: !approve }),
+      body: JSON.stringify({ userId, action: approve ? "approve" : "suspend" }),
     });
     setLoading(null);
     if (!res.ok) { toast.error("Failed."); return; }
@@ -65,7 +66,7 @@ export function MusiciansAdminClient({ musicians: initial }: { musicians: Musici
               <Button
                 size="sm"
                 className="h-7 text-xs bg-green-600/20 text-green-400 hover:bg-green-600/30 border border-green-800/30"
-                onClick={() => setStatus(musician.id, musician.user.email, true)}
+                onClick={() => setStatus(musician.id, musician.userId, true)}
                 disabled={loading === musician.id}
               >
                 {loading === musician.id ? <Loader2 className="w-3 h-3 animate-spin" /> : "Approve"}
@@ -76,7 +77,7 @@ export function MusiciansAdminClient({ musicians: initial }: { musicians: Musici
                 size="sm"
                 variant="outline"
                 className="h-7 text-xs border-red-800/50 text-red-400 hover:bg-red-950/30"
-                onClick={() => setStatus(musician.id, musician.user.email, false)}
+                onClick={() => setStatus(musician.id, musician.userId, false)}
                 disabled={loading === musician.id}
               >
                 Suspend

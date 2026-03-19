@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Radio, Compass, User } from "lucide-react";
+import { Radio, Compass, User, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { href: "/ar", label: "AR", Icon: Radio },
+  { href: "/tribes", label: "Tribes", Icon: Shield },
   { href: "/explore", label: "Explore", Icon: Compass },
   { href: "/profile", label: "Profile", Icon: User },
 ];
