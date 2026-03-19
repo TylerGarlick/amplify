@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { MapPicker } from "@/components/stages/MapPicker";
 import { MusicUploader } from "@/components/stages/MusicUploader";
 import { StagePreview, type StageElement } from "@/components/stages/StagePreview";
+import { ARStageVizSelector, type VizStyle } from "@/components/stages/ARStageVizSelector";
 
 // Dynamic import for AR Stage Builder (needs window/canvas)
 const ARStageBuilder = dynamic(
@@ -44,6 +45,7 @@ interface StageFormData {
   longitude: number | "";
   radius: number[];
   isPublic: boolean;
+  vizStyle: VizStyle | null;
 }
 
 const DEFAULT_ELEMENTS: StageElement[] = [
@@ -80,6 +82,7 @@ export default function CreateStagePage() {
     longitude: "",
     radius: [50],
     isPublic: true,
+    vizStyle: null,
   });
   
   const [elements, setElements] = useState<StageElement[]>(DEFAULT_ELEMENTS);
@@ -168,6 +171,7 @@ export default function CreateStagePage() {
           longitude: stageData.longitude,
           radius: stageData.radius[0],
           isPublic: publish,
+          vizStyle: stageData.vizStyle,
         }),
       });
 
@@ -276,6 +280,12 @@ export default function CreateStagePage() {
                 className="flex-1 data-[state=active]:bg-violet-600/20 data-[state=active]:text-violet-400"
               >
                 Music
+              </TabsTrigger>
+              <TabsTrigger 
+                value="visualization" 
+                className="flex-1 data-[state=active]:bg-violet-600/20 data-[state=active]:text-violet-400"
+              >
+                Visualization
               </TabsTrigger>
             </TabsList>
 
@@ -415,6 +425,21 @@ export default function CreateStagePage() {
                     </p>
                   </div>
                 )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="visualization" className="flex-1 overflow-y-auto p-4 mt-0">
+              <div className="space-y-4">
+                <div>
+                  <h3 className="text-sm font-medium text-white mb-1">Choose Visualization Style</h3>
+                  <p className="text-xs text-zinc-500 mb-4">
+                    Select how your stage will visualize audio. You can customize further after creation.
+                  </p>
+                </div>
+                <ARStageVizSelector
+                  selectedStyle={stageData.vizStyle}
+                  onSelect={(style) => setStageData(prev => ({ ...prev, vizStyle: style }))}
+                />
               </div>
             </TabsContent>
           </Tabs>
