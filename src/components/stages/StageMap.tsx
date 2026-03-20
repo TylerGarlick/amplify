@@ -9,6 +9,7 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { MapPin, Navigation, Loader2, Music, Radio, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RADIUS_OPTIONS, formatDistance, useRadiusFilter } from "@/contexts/RadiusFilterContext";
 
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -48,6 +49,31 @@ function MapClickHandler({ onLocationChange }: { onLocationChange?: (lat: number
     },
   });
   return null;
+}
+
+function RadiusSelector() {
+  const { radius, setRadius, hasLocation } = useRadiusFilter();
+
+  if (!hasLocation) return null;
+
+  return (
+    <div className="flex items-center gap-1 bg-zinc-800/90 rounded-md p-0.5 backdrop-blur-sm">
+      {RADIUS_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setRadius(option.value)}
+          className={`px-2 py-1 text-xs rounded transition-all ${
+            radius === option.value
+              ? "bg-violet-600 text-white"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function UserLocationMarker({ lat, lng }: { lat: number; lng: number }) {
@@ -131,9 +157,7 @@ function StagePopupContent({ stage }: { stage: StageMapStage }) {
       </div>
       {stage.distance !== undefined && (
         <div className="stage-popup-distance">
-          {stage.distance < 1000
-            ? `${Math.round(stage.distance)}m away`
-            : `${(stage.distance / 1000).toFixed(1)}km away`}
+          {formatDistance(stage.distance)} away
         </div>
       )}
     </div>
@@ -180,6 +204,8 @@ export function StageMap({
     }
   }, [selectedStageId, stages]);
 
+  const { setUserLocation } = useRadiusFilter();
+
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
       return;
@@ -190,6 +216,7 @@ export function StageMap({
         const { latitude, longitude } = pos.coords;
         setCurrentUserLat(latitude);
         setCurrentUserLng(longitude);
+        setUserLocation(latitude, longitude);
         setCenter([latitude, longitude]);
         if (mapRef.current) {
           mapRef.current.setView([latitude, longitude], 14);
@@ -227,6 +254,7 @@ export function StageMap({
           )}
           My Location
         </Button>
+        <RadiusSelector />
       </div>
 
       {/* Stage count badge */}
