@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Music, Clock, MapPin, Users, Loader2, Play, Radio, ChevronRight } from "lucide-react";
+import { Music, Clock, MapPin, Users, Loader2, Play, Radio, ChevronRight, Settings } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -151,6 +151,17 @@ export function UserProfile() {
             color="blue"
           />
         </div>
+      </div>
+
+      {/* Settings Button */}
+      <div className="px-4 pb-3">
+        <Link
+          href="/settings"
+          className="flex items-center justify-center gap-2 w-full py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-700 transition-colors text-sm"
+        >
+          <Settings className="w-4 h-4" />
+          Settings
+        </Link>
       </div>
 
       {/* Tabs Section */}
