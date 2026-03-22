@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -9,12 +9,26 @@ import "leaflet.markercluster/dist/MarkerCluster.Default.css";
 import "leaflet.markercluster";
 import { MapPin, Navigation, Loader2, Music, Radio, X, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { RADIUS_OPTIONS, formatDistance, useRadiusFilter } from "@/contexts/RadiusFilterContext";
+import {
+  getConfiguredTileProvider,
+  getTileUrl,
+  getApiKey,
+  TILE_PROVIDERS,
+  type TileProvider
+} from "@/lib/map-tile-config";
 
+// CDN URLs for Leaflet default marker icons
+const MARKER_ICON_2X = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png";
+const MARKER_ICON = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png";
+const MARKER_SHADOW = "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png";
+
+// Privacy: Disable Leaflet's default tile server URLs that could leak GPS data
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
-  iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
-  shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+  iconRetinaUrl: MARKER_ICON_2X,
+  iconUrl: MARKER_ICON,
+  shadowUrl: MARKER_SHADOW,
 });
 
 export interface StageMapStage {
@@ -39,6 +53,8 @@ interface StageMapProps {
   onStageSelect?: (stage: StageMapStage) => void;
   selectedStageId?: string | null;
   height?: string;
+  /** Override the default tile provider for this instance */
+  tileProvider?: TileProvider;
 }
 
 function MapClickHandler({ onLocationChange }: { onLocationChange?: (lat: number, lng: number) => void }) {
@@ -48,6 +64,31 @@ function MapClickHandler({ onLocationChange }: { onLocationChange?: (lat: number
     },
   });
   return null;
+}
+
+function RadiusSelector() {
+  const { radius, setRadius, hasLocation } = useRadiusFilter();
+
+  if (!hasLocation) return null;
+
+  return (
+    <div className="flex items-center gap-1 bg-zinc-800/90 rounded-md p-0.5 backdrop-blur-sm">
+      {RADIUS_OPTIONS.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          onClick={() => setRadius(option.value)}
+          className={`px-2 py-1 text-xs rounded transition-all ${
+            radius === option.value
+              ? "bg-violet-600 text-white"
+              : "text-zinc-400 hover:text-zinc-200"
+          }`}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
 }
 
 function UserLocationMarker({ lat, lng }: { lat: number; lng: number }) {
@@ -131,13 +172,113 @@ function StagePopupContent({ stage }: { stage: StageMapStage }) {
       </div>
       {stage.distance !== undefined && (
         <div className="stage-popup-distance">
-          {stage.distance < 1000
-            ? `${Math.round(stage.distance)}m away`
-            : `${(stage.distance / 1000).toFixed(1)}km away`}
+          {formatDistance(stage.distance)} away
         </div>
       )}
     </div>
   );
+}
+
+/**
+ * MarkerClusterLayer - Wraps markers in a MarkerClusterGroup for better
+ * performance when there are many stages in close proximity.
+ */
+function MarkerClusterLayer({ stages, onMarkerClick, selectedStageId }: {
+  stages: StageMapStage[];
+  onMarkerClick: (stage: StageMapStage) => void;
+  selectedStageId?: string | null;
+}) {
+  const map = useMap();
+  // Use type assertion for MarkerClusterGroup since leaflet.markercluster augments L namespace
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const clusterRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (!map) return;
+
+    // Clean up existing cluster
+    if (clusterRef.current) {
+      map.removeLayer(clusterRef.current);
+    }
+
+    // Create new cluster group with optimized settings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cluster: any = L.markerClusterGroup({
+      chunkedLoading: true,           // Progressive loading for performance
+      chunkInterval: 200,             // Batch processing interval (ms)
+      chunkDelay: 50,                 // Delay between batches (ms)
+      maxClusterRadius: 50,           // Max radius for clustering (pixels)
+      spiderfyOnMaxZoom: true,        // Expand at max zoom
+      showCoverageOnHover: false,     // Don't show coverage polygon
+      zoomToBoundsOnClick: true,      // Zoom to bounds when clicking cluster
+      disableClusteringAtZoom: 18,   // Stop clustering at high zoom levels
+      iconCreateFunction: (markerCluster: L.MarkerCluster) => {
+        const count = markerCluster.getChildCount();
+        let size = "small";
+        if (count > 50) size = "large";
+        else if (count > 10) size = "medium";
+
+        return L.divIcon({
+          html: `<div class="marker-cluster marker-cluster-${size}"><span>${count}</span></div>`,
+          className: `marker-cluster marker-cluster-${size}`,
+          iconSize: new L.Point(40, 40),
+        });
+      },
+    });
+
+    // Add markers to cluster
+    stages.forEach((stage) => {
+      const marker = L.marker([stage.latitude, stage.longitude], {
+        icon: createStageIcon(selectedStageId === stage.id, stage.isActive),
+      });
+
+      marker.on("click", () => onMarkerClick(stage));
+
+      // Add popup
+      const popupContent = `
+        <div class="stage-popup">
+          <div class="stage-popup-header">
+            <h3 class="stage-popup-title">${stage.name}</h3>
+            <span class="stage-popup-badge ${stage.isActive ? "active" : "inactive"}">
+              ${stage.isActive ? "LIVE" : "OFFLINE"}
+            </span>
+          </div>
+          <p class="stage-popup-musician">${stage.musician.displayName}</p>
+          ${stage.stageTrackLinks[0]?.track ? `
+            <div class="stage-popup-track">
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+              </svg>
+              <span>${stage.stageTrackLinks[0].track.title}</span>
+            </div>
+          ` : ""}
+          <div class="stage-popup-coords">
+            <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+            </svg>
+            <span>${stage.latitude.toFixed(4)}, ${stage.longitude.toFixed(4)}</span>
+          </div>
+          ${stage.distance !== undefined ? `<div class="stage-popup-distance">${formatDistance(stage.distance)} away</div>` : ""}
+        </div>
+      `;
+
+      marker.bindPopup(popupContent, {
+        className: "stage-popup-container",
+      });
+      cluster.addLayer(marker);
+    });
+
+    map.addLayer(cluster);
+    clusterRef.current = cluster;
+
+    return () => {
+      if (clusterRef.current) {
+        map.removeLayer(clusterRef.current);
+      }
+    };
+  }, [map, stages, onMarkerClick, selectedStageId]);
+
+  return null;
 }
 
 export function StageMap({
@@ -147,6 +288,7 @@ export function StageMap({
   onStageSelect,
   selectedStageId,
   height = "100%",
+  tileProvider: explicitTileProvider,
 }: StageMapProps) {
   const [mapReady, setMapReady] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
@@ -155,6 +297,22 @@ export function StageMap({
   const [currentUserLng, setCurrentUserLng] = useState<number | null>(userLng ?? null);
   const [selectedStage, setSelectedStage] = useState<StageMapStage | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+
+  // Determine tile provider - use explicit or fall back to configured
+  const tileProvider = useMemo(() => {
+    return explicitTileProvider ?? getConfiguredTileProvider();
+  }, [explicitTileProvider]);
+
+  // Get tile URL with API key substitution if needed
+  const tileUrl = useMemo(() => {
+    const apiKey = getApiKey(tileProvider);
+    return getTileUrl(tileProvider, apiKey);
+  }, [tileProvider]);
+
+  // Get attribution text for the current provider
+  const tileAttribution = useMemo(() => {
+    return TILE_PROVIDERS[tileProvider].attribution;
+  }, [tileProvider]);
 
   // Determine center
   useEffect(() => {
@@ -180,7 +338,9 @@ export function StageMap({
     }
   }, [selectedStageId, stages]);
 
-  const handleUseMyLocation = () => {
+  const { setUserLocation } = useRadiusFilter();
+
+  const handleUseMyLocation = useCallback(() => {
     if (!navigator.geolocation) {
       return;
     }
@@ -190,6 +350,7 @@ export function StageMap({
         const { latitude, longitude } = pos.coords;
         setCurrentUserLat(latitude);
         setCurrentUserLng(longitude);
+        setUserLocation(latitude, longitude);
         setCenter([latitude, longitude]);
         if (mapRef.current) {
           mapRef.current.setView([latitude, longitude], 14);
@@ -199,14 +360,18 @@ export function StageMap({
       () => {
         setIsLocating(false);
       },
-      { enableHighAccuracy: true }
+      {
+        enableHighAccuracy: true,
+        // Privacy: set maximum age to avoid repeated GPS pings
+        maximumAge: 5 * 60 * 1000, // 5 minutes
+      }
     );
-  };
+  }, [setUserLocation]);
 
-  const handleMarkerClick = (stage: StageMapStage) => {
+  const handleMarkerClick = useCallback((stage: StageMapStage) => {
     setSelectedStage(stage);
     onStageSelect?.(stage);
-  };
+  }, [onStageSelect]);
 
   return (
     <div className="stage-map-container" style={{ height }}>
@@ -227,6 +392,7 @@ export function StageMap({
           )}
           My Location
         </Button>
+        <RadiusSelector />
       </div>
 
       {/* Stage count badge */}
@@ -244,9 +410,11 @@ export function StageMap({
           if (map) mapRef.current = map;
         }}
       >
+        {/* Privacy: Use configured tile provider instead of OSM to avoid GPS leaks */}
         <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          attribution={tileAttribution}
+          url={tileUrl}
+          maxZoom={TILE_PROVIDERS[tileProvider].maxZoom}
         />
 
         <MapClickHandler />
@@ -260,21 +428,31 @@ export function StageMap({
           <UserLocationMarker lat={currentUserLat} lng={currentUserLng} />
         )}
 
-        {/* Stage markers */}
-        {stages.map((stage) => (
-          <Marker
-            key={stage.id}
-            position={[stage.latitude, stage.longitude]}
-            icon={createStageIcon(selectedStage?.id === stage.id, stage.isActive)}
-            eventHandlers={{
-              click: () => handleMarkerClick(stage),
-            }}
-          >
-            <Popup className="stage-popup-container">
-              <StagePopupContent stage={stage} />
-            </Popup>
-          </Marker>
-        ))}
+        {/* Stage markers with clustering for dense areas */}
+        {stages.length > 20 ? (
+          // Use clustering for many stages
+          <MarkerClusterLayer
+            stages={stages}
+            onMarkerClick={handleMarkerClick}
+            selectedStageId={selectedStageId}
+          />
+        ) : (
+          // Direct markers for few stages
+          stages.map((stage) => (
+            <Marker
+              key={stage.id}
+              position={[stage.latitude, stage.longitude]}
+              icon={createStageIcon(selectedStage?.id === stage.id, stage.isActive)}
+              eventHandlers={{
+                click: () => handleMarkerClick(stage),
+              }}
+            >
+              <Popup className="stage-popup-container">
+                <StagePopupContent stage={stage} />
+              </Popup>
+            </Marker>
+          ))
+        )}
       </MapContainer>
 
       {/* Selected stage info panel */}
@@ -321,6 +499,7 @@ export function StageMap({
       )}
 
       <style jsx global>{`
+        /* User location marker styles */
         .user-location-wrapper {
           background: none !important;
           border: none !important;
@@ -353,6 +532,8 @@ export function StageMap({
           0% { transform: scale(0.5); opacity: 1; }
           100% { transform: scale(2); opacity: 0; }
         }
+
+        /* Stage marker styles */
         .stage-marker-wrapper {
           background: none !important;
           border: none !important;
@@ -378,6 +559,50 @@ export function StageMap({
         .stage-marker.selected .stage-marker-inner {
           box-shadow: 0 0 0 3px var(--marker-color), 0 4px 16px rgba(139, 92, 246, 0.4);
         }
+
+        /* Marker cluster styles */
+        .marker-cluster {
+          background: rgba(139, 92, 246, 0.4);
+          border-radius: 50%;
+        }
+        .marker-cluster div {
+          background: rgba(139, 92, 246, 0.8);
+          color: white;
+          border-radius: 50%;
+          font-weight: 600;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .marker-cluster-small {
+          width: 30px;
+          height: 30px;
+        }
+        .marker-cluster-small div {
+          width: 26px;
+          height: 26px;
+          font-size: 10px;
+        }
+        .marker-cluster-medium {
+          width: 40px;
+          height: 40px;
+        }
+        .marker-cluster-medium div {
+          width: 34px;
+          height: 34px;
+          font-size: 12px;
+        }
+        .marker-cluster-large {
+          width: 50px;
+          height: 50px;
+        }
+        .marker-cluster-large div {
+          width: 42px;
+          height: 42px;
+          font-size: 14px;
+        }
+
+        /* Popup styles */
         .stage-popup-container :global(.leaflet-popup-content-wrapper) {
           background: #18181b;
           border: 1px solid #27272a;
@@ -454,6 +679,9 @@ export function StageMap({
           font-size: 10px;
           color: #52525b;
           font-family: monospace;
+        }
+        .stage-popup-coords svg {
+          flex-shrink: 0;
         }
         .stage-popup-distance {
           font-size: 11px;
