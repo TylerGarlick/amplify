@@ -66,7 +66,11 @@ function ExploreContent() {
         alert(`Could not get location: ${err.message}`);
         setLocationLoading(false);
       },
-      { enableHighAccuracy: true }
+      {
+        enableHighAccuracy: true,
+        // Privacy: reuse cached location to avoid repeated GPS pings
+        maximumAge: 5 * 60 * 1000, // 5 minutes
+      }
     );
   }
 

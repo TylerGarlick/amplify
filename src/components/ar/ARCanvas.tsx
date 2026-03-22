@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo } from "react";
 import { useThree, useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { useAudioStore } from "@/stores/audioStore";
@@ -20,7 +20,9 @@ interface ARVisualizationProps {
 }
 
 function ARVisualization({ visualization, stage }: ARVisualizationProps) {
-  const beatData = useAudioStore((s) => s.beatData);
+  const beatData = useAudioStore((s) => s.beatData) ?? {
+    bass: 0, mid: 0, treble: 0, beat: false, rms: 0, waveform: null
+  };
   const isPlaying = useAudioStore((s) => s.isPlaying);
 
   const { x, y, z } = gpsToWorldPosition(
@@ -31,26 +33,21 @@ function ARVisualization({ visualization, stage }: ARVisualizationProps) {
     visualization.offsetY
   );
 
-  const sharedProps = {
-    config: visualization.config,
-    beatData,
-    isPlaying,
-    position: [x, y, z] as [number, number, number],
-    rotation: [visualization.rotationX, visualization.rotationY, visualization.rotationZ] as [number, number, number],
-    scale: [visualization.scaleX, visualization.scaleY, visualization.scaleZ] as [number, number, number],
-  };
+  const position = [x, y, z] as [number, number, number];
+  const rotation = [visualization.rotationX, visualization.rotationY, visualization.rotationZ] as [number, number, number];
+  const scale = [visualization.scaleX, visualization.scaleY, visualization.scaleZ] as [number, number, number];
 
   switch (visualization.type) {
     case "PARTICLE_SYSTEM":
-      return <ParticleSystem {...sharedProps} />;
+      return <ParticleSystem config={visualization.config as any} beatData={beatData} isPlaying={isPlaying} position={position} rotation={rotation} scale={scale} />;
     case "GEOMETRY_PULSE":
-      return <GeometryPulse {...sharedProps} />;
+      return <GeometryPulse config={visualization.config as any} beatData={beatData} isPlaying={isPlaying} position={position} rotation={rotation} scale={scale} />;
     case "WAVEFORM_RIBBON":
-      return <WaveformRibbon {...sharedProps} />;
+      return <WaveformRibbon config={visualization.config as any} beatData={beatData} isPlaying={isPlaying} position={position} rotation={rotation} scale={scale} />;
     case "FREQUENCY_BARS":
-      return <FrequencyBars {...sharedProps} />;
+      return <FrequencyBars config={visualization.config as any} beatData={beatData} isPlaying={isPlaying} position={position} rotation={rotation} scale={scale} />;
     case "LIGHT_SHOW":
-      return <LightShow {...sharedProps} />;
+      return <LightShow config={visualization.config as any} beatData={beatData} isPlaying={isPlaying} position={position} rotation={rotation} scale={scale} />;
     default:
       return null;
   }
@@ -210,30 +207,21 @@ function ARSceneWithFallback({ videoElement, activeStage, onSessionStart, onSess
 
 function Starfield() {
   const pointsRef = useRef<THREE.Points>(null);
-  const count = 2000;
 
-  useEffect(() => {
-    if (!pointsRef.current) return;
-    const geo = pointsRef.current.geometry;
-    const positions = geo.attributes.position.array as Float32Array;
-    for (let i = 0; i < count; i++) {
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry();
+    const positions = new Float32Array(2000 * 3);
+    for (let i = 0; i < 2000; i++) {
       positions[i * 3] = (Math.random() - 0.5) * 200;
       positions[i * 3 + 1] = (Math.random() - 0.5) * 200;
       positions[i * 3 + 2] = (Math.random() - 0.5) * 200;
     }
-    geo.attributes.position.needsUpdate = true;
+    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    return geo;
   }, []);
 
   return (
-    <points ref={pointsRef}>
-      <bufferGeometry>
-        <bufferAttribute
-          attach="attributes-position"
-          array={new Float32Array(count * 3)}
-          count={count}
-          itemSize={3}
-        />
-      </bufferGeometry>
+    <points ref={pointsRef} geometry={geometry}>
       <pointsMaterial size={0.3} color="#a78bfa" transparent opacity={0.6} sizeAttenuation />
     </points>
   );
@@ -251,6 +239,7 @@ function GridFloor() {
 // ─── Internal useRef that supports lazy initialization ────────────────────────
 
 function useStateRef<T>(init: () => T): [T, (val: T) => void] {
-  const { useState } = require("react");
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { useState } = require("react") as typeof import("react");
   return useState<T>(init);
 }

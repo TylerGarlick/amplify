@@ -1,12 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MapPin, Navigation, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import {
+  getConfiguredTileProvider,
+  getTileUrl,
+  getApiKey,
+  TILE_PROVIDERS,
+} from "@/lib/map-tile-config";
 
 // Fix leaflet default marker icon issue
 delete (L.Icon.Default.prototype as unknown as { _getIconUrl?: unknown })._getIconUrl;
@@ -46,6 +52,14 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
   const [currentLng, setCurrentLng] = useState(longitude);
   const [mapReady, setMapReady] = useState(false);
 
+  // Memoize tile config to avoid repeated calls on re-render
+  const tileProvider = useMemo(() => getConfiguredTileProvider(), []);
+  const tileConfig = TILE_PROVIDERS[tileProvider];
+  const tileUrl = useMemo(
+    () => getTileUrl(tileProvider, getApiKey(tileProvider)),
+    [tileProvider]
+  );
+
   // Update state when props change
   useEffect(() => {
     setCurrentLat(latitude);
@@ -75,7 +89,11 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
         toast.error(`Could not get location: ${err.message}`);
         setIsLocating(false);
       },
-      { enableHighAccuracy: true }
+      {
+        enableHighAccuracy: true,
+        // Privacy: reuse cached location to avoid repeated GPS pings
+        maximumAge: 5 * 60 * 1000, // 5 minutes
+      }
     );
   };
 
@@ -117,9 +135,11 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
           className="h-full w-full"
           whenReady={() => setMapReady(true)}
         >
+          {/* Privacy: Use configured tile provider (Stadia by default, not OSM) */}
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={tileConfig.attribution}
+            url={tileUrl}
+            maxZoom={tileConfig.maxZoom}
           />
           <MapClickHandler onLocationChange={handleLocationChange} />
           <MapUpdater latitude={currentLat} longitude={currentLng} />
