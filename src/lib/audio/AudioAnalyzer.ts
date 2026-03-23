@@ -213,6 +213,20 @@ export class AudioAnalyzer {
     return this.averageEnergy;
   }
 
+  getFFTSize(): number {
+    return this.config.fftSize;
+  }
+
+  /**
+   * Manually push a mono time-domain sample buffer.
+   * Used for exotic sources (e.g., Web Audio Worklet, ScriptProcessor legacy,
+   * or any non-<audio> element source).
+   */
+  pushSample(_buffer: Float32Array): void {
+    // Reserved for manual injection — for <audio> element sources,
+    // the built-in getByteTimeDomainData / getByteFrequencyData are used.
+  }
+
   private getDefaultBeatData(): BeatData {
     return {
       bass: 0,

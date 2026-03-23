@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { GeofenceNotificationProvider } from "@/contexts/GeofenceNotificationContext";
 import { ARViewClient } from "@/components/ar/ARViewClient";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function ARPage() {
-  return <ARViewClient />;
+  return (
+    <GeofenceNotificationProvider nearbyRadius={2000} debounceMs={10_000}>
+      <ARViewClient />
+    </GeofenceNotificationProvider>
+  );
 }
