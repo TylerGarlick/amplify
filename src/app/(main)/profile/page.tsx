@@ -7,9 +7,9 @@ import { LogoutButton } from "@/components/shared/LogoutButton";
 
 export default async function ProfilePage() {
   const session = await auth();
-  if (!session) redirect("/login");
+  if (!session?.user) redirect("/login");
 
-  const user = session.user as { name?: string | null; email?: string | null; role?: string; id?: string } | undefined;
+  const user = session.user as { name?: string | null; email?: string | null; role?: string; id?: string };
   const role = user?.role ?? "USER";
 
   const roleColors: Record<string, string> = {
