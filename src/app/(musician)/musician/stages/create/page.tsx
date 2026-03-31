@@ -211,12 +211,7 @@ export default function CreateStagePage() {
       }
 
       toast.success(publish ? "Stage published!" : "Stage created!");
-      
-      if (publish) {
-        router.push("/explore");
-      } else {
-        router.push(`/musician/stages/${stage.id}/visualize`);
-      }
+      router.push(`/musician/stages/${stage.id}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create stage");
     } finally {

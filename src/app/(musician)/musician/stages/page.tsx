@@ -28,18 +28,25 @@ export default async function StagesPage() {
           <h1 className="text-xl font-bold text-white">Stages</h1>
           <p className="text-sm text-zinc-500">{stages.length} GPS-anchored stage{stages.length !== 1 ? "s" : ""}</p>
         </div>
-        <Link href="/musician/stages/new">
-          <Button className="bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/20">
-            <Plus className="w-4 h-4 mr-2" /> New Stage
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/musician/stages/map">
+            <Button variant="outline" size="sm" className="border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700 hover:text-white">
+              <MapPin className="w-4 h-4 mr-2" /> Map View
+            </Button>
+          </Link>
+          <Link href="/musician/stages/create">
+            <Button className="bg-violet-600 hover:bg-violet-500 text-white shadow-lg shadow-violet-600/20">
+              <Plus className="w-4 h-4 mr-2" /> New Stage
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {stages.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-800 p-16 text-center">
           <MapPin className="w-10 h-10 mx-auto mb-3 text-zinc-700" />
           <p className="text-zinc-500 text-sm">No stages yet.</p>
-          <Link href="/musician/stages/new">
+          <Link href="/musician/stages/create">
             <Button variant="ghost" className="mt-4 text-violet-400 hover:text-violet-300">
               Create your first stage →
             </Button>
