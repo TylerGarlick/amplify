@@ -61,3 +61,8 @@ mkbrackets.sh
 .history/README_20260224152041.md
 .history/README_20260224152044.md
 .history/README_20260224152047.md
+.env
+dev.db
+.env.test
+check-db.js
+test-results/
