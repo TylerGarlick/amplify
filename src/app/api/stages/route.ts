@@ -59,7 +59,11 @@ export async function GET(request: NextRequest) {
 
     let stages = await prisma.stage.findMany({
       where,
-      include: include as never,
+      include: {
+        musician: { select: { displayName: true } },
+        visualizations: true,
+        stageTrackLinks: include.stageTrackLinks ? { include: { track: true } } : undefined,
+      },
       orderBy: { createdAt: "desc" },
     });
 

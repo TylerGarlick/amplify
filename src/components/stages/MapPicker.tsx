@@ -58,6 +58,10 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
     onLocationChange(lat, lng);
   };
 
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualLat, setManualLat] = useState("");
+  const [manualLng, setManualLng] = useState("");
+
   const handleUseMyLocation = () => {
     if (!navigator.geolocation) {
       toast.error("Geolocation is not supported by your browser");
@@ -74,9 +78,22 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
       (err) => {
         toast.error(`Could not get location: ${err.message}`);
         setIsLocating(false);
+        setShowManualEntry(true);
       },
       { enableHighAccuracy: true }
     );
+  };
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const lat = parseFloat(manualLat);
+    const lng = parseFloat(manualLng);
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      toast.error("Invalid coordinates. Lat: -90 to 90, Lng: -180 to 180");
+      return;
+    }
+    handleLocationChange(lat, lng);
+    setShowManualEntry(false);
   };
 
   // Calculate default center (default to SF if no coords provided)
@@ -89,17 +106,29 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
           <MapPin className="w-4 h-4" />
           <span className="text-xs tracking-wider uppercase">Pin Your Stage</span>
         </div>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 text-xs border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-          onClick={handleUseMyLocation}
-          disabled={isLocating}
-        >
-          {isLocating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Navigation className="w-3 h-3 mr-1" />}
-          Use My Location
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+            onClick={() => setShowManualEntry(!showManualEntry)}
+          >
+            <MapPin className="w-3 h-3 mr-1" />
+            Manual
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+            onClick={handleUseMyLocation}
+            disabled={isLocating}
+          >
+            {isLocating ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Navigation className="w-3 h-3 mr-1" />}
+            GPS
+          </Button>
+        </div>
       </div>
 
       <div className="relative h-[300px]">
@@ -124,10 +153,50 @@ export function MapPicker({ latitude, longitude, onLocationChange, radius = 50 }
           <MapClickHandler onLocationChange={handleLocationChange} />
           <MapUpdater latitude={currentLat} longitude={currentLng} />
           <Marker position={[currentLat, currentLng]} />
-          
+
           {/* Radius indicator */}
           <Circle radius={radius} center={[currentLat, currentLng]} />
         </MapContainer>
+
+        {showManualEntry && (
+          <div className="absolute top-3 right-3 z-[1001] bg-zinc-900 border border-zinc-700 rounded-lg p-3 w-64 shadow-xl">
+            <p className="text-xs text-zinc-400 mb-2 font-medium">Enter coordinates manually</p>
+            <form onSubmit={handleManualSubmit} className="flex flex-col gap-2">
+              <input
+                type="text"
+                placeholder="Latitude (e.g. 37.7749)"
+                value={manualLat}
+                onChange={(e) => setManualLat(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 rounded text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500"
+              />
+              <input
+                type="text"
+                placeholder="Longitude (e.g. -122.4194)"
+                value={manualLng}
+                onChange={(e) => setManualLng(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs bg-zinc-800 border border-zinc-700 rounded text-zinc-100 placeholder-zinc-600 focus:outline-none focus:border-violet-500"
+              />
+              <div className="flex gap-2">
+                <Button
+                  type="submit"
+                  size="sm"
+                  className="flex-1 h-7 text-xs bg-violet-600 hover:bg-violet-500 text-white"
+                >
+                  Apply
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="flex-1 h-7 text-xs border-zinc-700 bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                  onClick={() => setShowManualEntry(false)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
 
       <div className="p-3 border-t border-zinc-800 bg-zinc-900/50">
