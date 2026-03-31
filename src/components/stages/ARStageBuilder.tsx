@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls, Grid, Environment, Html } from "@react-three/drei";
+import type * as THREE from "three";
 import { 
   Box, Circle, Layers, Speaker, Lightbulb, Monitor, 
   Users, Move, RotateCcw, Plus, Trash2, Eye, EyeOff,

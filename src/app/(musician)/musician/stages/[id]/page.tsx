@@ -21,7 +21,7 @@ export default async function StageDetailPage({ params }: { params: Promise<{ id
       visualizations: { orderBy: { sortOrder: "asc" } },
       stageTrackLinks: {
         orderBy: { sortOrder: "asc" },
-        include: { track: { select: { id: true, title: true, artist: true, duration: true, bpm: true } } },
+        include: { track: { select: { id: true, title: true, artist: true, duration: true, bpm: true, fileUrl: true } } },
       },
     },
   });

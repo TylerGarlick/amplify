@@ -15,7 +15,7 @@ function PermissionPrompt({
   description,
   onRequest,
 }: {
-  icon: React.ElementType;
+  icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
   onRequest: () => void;
@@ -24,7 +24,7 @@ function PermissionPrompt({
     <div className="flex-1 flex flex-col items-center justify-center gap-6 p-8 text-center">
       <div className="relative">
         <div className="w-20 h-20 rounded-full bg-violet-600/10 border border-violet-600/30 flex items-center justify-center">
-          <Icon className="w-10 h-10 text-violet-400" />
+          <Icon className="w-10 h-10 text-violet-300" />
         </div>
         <div className="absolute -inset-2 rounded-full border border-violet-600/10 animate-ping" />
       </div>
@@ -34,7 +34,7 @@ function PermissionPrompt({
       </div>
       <Button
         onClick={onRequest}
-        className="bg-violet-600 hover:bg-violet-500 text-white px-8 shadow-lg shadow-violet-600/30"
+        className="bg-violet-600 hover:bg-violet-700 text-white px-8 shadow-lg shadow-violet-600/30"
       >
         Grant Access
       </Button>
@@ -106,7 +106,7 @@ function StageCard({
             <div className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
             <span className="text-xs text-violet-300">Now playing: {stage.activeTrack.title}</span>
           </div>
-          <Button size="sm" className="h-7 text-xs bg-violet-600 hover:bg-violet-500 px-3">
+          <Button size="sm" className="h-7 text-xs bg-violet-600 hover:bg-violet-700 px-3">
             <Zap className="w-3 h-3 mr-1" />
             Experience
           </Button>
@@ -232,7 +232,7 @@ export function ARViewClient() {
             onClick={() => enterStage(stage.id)}
           >
             <div className="relative flex flex-col items-center">
-              <div className="w-4 h-4 rounded-full bg-violet-500 shadow-lg shadow-violet-500/60 animate-pulse" />
+              <div className="w-4 h-4 rounded-full bg-violet-500 shadow-lg shadow-violet-600/60 animate-pulse" />
               <div className="mt-1 px-2 py-0.5 rounded-md bg-black/70 backdrop-blur-sm border border-violet-800/50 text-[10px] text-violet-300 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity">
                 {stage.name}
               </div>
@@ -263,7 +263,7 @@ export function ARViewClient() {
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="w-1 rounded-full bg-violet-500 animate-pulse"
+                className="w-1 rounded-full bg-violet-600 animate-pulse"
                 style={{ height: `${8 + Math.random() * 16}px`, animationDelay: `${i * 0.15}s` }}
               />
             ))}

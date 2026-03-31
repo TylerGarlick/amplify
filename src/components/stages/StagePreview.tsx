@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html, Environment } from "@react-three/drei";
+import type * as THREE from "three";
 import { 
   Play, Pause, SkipBack, SkipForward, Volume2, VolumeX,
   Maximize, Maximize2, X, ChevronLeft, ChevronRight
@@ -152,7 +153,7 @@ export function StagePreview({ elements, trackUrl, stageName }: StagePreviewProp
   const audioRef = useRef<HTMLAudioElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | undefined>(undefined);
 
   // Initialize audio analyzer
   useEffect(() => {

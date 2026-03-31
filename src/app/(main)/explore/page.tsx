@@ -1,15 +1,21 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { MapPin, Radio, Music, Navigation, Loader2, Map, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { StageMap, StageMapStage } from "@/components/stages/StageMap";
+import type { StageMapStage } from "@/components/stages/StageMap";
+
+const StageMap = dynamic(
+  () => import("@/components/stages/StageMap").then((m) => ({ default: m.StageMap })),
+  { ssr: false, loading: () => <div className="flex items-center justify-center h-full bg-zinc-900"><Loader2 className="w-8 h-8 animate-spin text-violet-500" /></div> }
+);
 
 interface Stage extends StageMapStage {}
 
-export default function ExplorePage() {
+function ExploreContent() {
   const searchParams = useSearchParams();
   const [stages, setStages] = useState<Stage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -197,5 +203,24 @@ export default function ExplorePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function ExploreLoading() {
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="flex flex-col items-center gap-3">
+        <Loader2 className="w-8 h-8 text-violet-500 animate-spin" />
+        <p className="text-sm text-zinc-500">Loading...</p>
+      </div>
+    </div>
+  );
+}
+
+export default function ExplorePage() {
+  return (
+    <Suspense fallback={<ExploreLoading />}>
+      <ExploreContent />
+    </Suspense>
   );
 }

@@ -19,7 +19,7 @@ interface Tribe {
 type Tab = "territories" | "leaderboard" | "my-tribe";
 
 export function TribePageClient() {
-  const { data: session, status } = useSession();
+  const { data: session, status } = useSession({ required: false });
   const [activeTab, setActiveTab] = useState<Tab>("territories");
   const [userTribe, setUserTribe] = useState<Tribe | null>(null);
   const [loading, setLoading] = useState(true);
