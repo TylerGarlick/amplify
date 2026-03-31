@@ -91,7 +91,7 @@ export function StageTrackUploader({ stageId }: StageTrackUploaderProps) {
         </button>
       </div>
 
-      <TrackUpload onTrackUploaded={handleTrackUploaded} maxSizeMB={100} />
+      <TrackUpload onTrackUploaded={handleTrackUploaded} maxSizeMB={50} />
 
       {pendingTrack && (
         <div className="flex items-center gap-2">
