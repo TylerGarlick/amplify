@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Canvas, useFrame } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { Button } from "@/components/ui/button";
-import { Camera, Sparkles, X, Play } from "lucide-react";
+import { Camera, Sparkles, X, Compass } from "lucide-react";
 
 // Global audio state
 let audioContext: AudioContext | null = null;
@@ -17,6 +17,12 @@ interface AudioData {
   treble: number;
   amplitude: number;
   beat: boolean;
+}
+
+interface DeviceOrientation {
+  alpha: number; // Z-axis rotation (compass direction)
+  beta: number;  // X-axis rotation (front-back tilt)
+  gamma: number; // Y-axis rotation (left-right tilt)
 }
 
 function useAudioAnalyzer() {
@@ -33,7 +39,6 @@ function useAudioAnalyzer() {
 
     const dataArray = new Uint8Array(analyser.frequencyBinCount);
     let lastBeatTime = 0;
-    const beatThreshold = 200;
     
     const updateAudioData = () => {
       analyser!.getByteFrequencyData(dataArray);
@@ -52,7 +57,6 @@ function useAudioAnalyzer() {
       const treble = trebleSum / (dataArray.length - midEnd) / 255;
       const amplitude = (bass + mid + treble) / 3;
       
-      // Detect beats (bass spikes)
       const now = Date.now();
       const beat = bass > 0.7 && (now - lastBeatTime > 200);
       if (beat) lastBeatTime = now;
@@ -67,9 +71,11 @@ function useAudioAnalyzer() {
   return audioData;
 }
 
-function BeatPulsingSphere({ audioData }: { audioData: AudioData }) {
-  const meshRef = useRef<THREE.Mesh>(null);
+function FixedStage({ audioData }: { audioData: AudioData }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const sphereRef = useRef<THREE.Mesh>(null);
   const particleSystemRef = useRef<THREE.Points>(null);
+  const platformRef = useRef<THREE.Mesh>(null);
   
   // Create particles
   const particlesGeometry = new THREE.BufferGeometry();
@@ -86,7 +92,6 @@ function BeatPulsingSphere({ audioData }: { audioData: AudioData }) {
     positions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
     positions[i * 3 + 2] = radius * Math.cos(phi);
     
-    // Violet to cyan gradient
     colors[i * 3] = 0.5 + Math.random() * 0.5;
     colors[i * 3 + 1] = 0.3 + Math.random() * 0.4;
     colors[i * 3 + 2] = 1.0;
@@ -96,44 +101,84 @@ function BeatPulsingSphere({ audioData }: { audioData: AudioData }) {
   particlesGeometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   
   useFrame((state, delta) => {
-    if (!meshRef.current || !particleSystemRef.current) return;
+    if (!sphereRef.current || !particleSystemRef.current || !platformRef.current) return;
     
     // Pulse sphere with bass
     const targetScale = 1 + audioData.bass * 1.8;
-    meshRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 8);
+    sphereRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 8);
     
-    // Rotate on beat
+    // Rotate sphere on beat
     if (audioData.beat) {
-      meshRef.current.rotation.y += 0.3;
+      sphereRef.current.rotation.y += 0.3;
+      sphereRef.current.rotation.x += 0.15;
     }
+    
+    // Slow continuous rotation
+    sphereRef.current.rotation.y += delta * 0.2;
     
     // Color shift with amplitude
     const hue = (state.clock.elapsedTime * 0.1 + audioData.amplitude * 0.5) % 1;
-    (meshRef.current.material as THREE.MeshStandardMaterial).color.setHSL(hue, 0.8, 0.5);
-    (meshRef.current.material as THREE.MeshStandardMaterial).emissive.setHSL(hue, 0.8, 0.3);
+    (sphereRef.current.material as THREE.MeshStandardMaterial).color.setHSL(hue, 0.8, 0.5);
+    (sphereRef.current.material as THREE.MeshStandardMaterial).emissive.setHSL(hue, 0.8, 0.4);
     
     // Animate particles
     const particlePositions = particleSystemRef.current.geometry.attributes.position.array as Float32Array;
     for (let i = 0; i < particleCount; i++) {
-      // Expand on beat
       const expansion = 1 + audioData.bass * 0.5;
       particlePositions[i * 3] *= 1 + (expansion - 1) * 0.1;
       particlePositions[i * 3 + 1] *= 1 + (expansion - 1) * 0.1;
       particlePositions[i * 3 + 2] *= 1 + (expansion - 1) * 0.1;
       
-      // Gentle rotation
-      const angle = state.clock.elapsedTime * 0.2;
+      const angle = state.clock.elapsedTime * 0.15;
       const x = particlePositions[i * 3];
       const z = particlePositions[i * 3 + 2];
       particlePositions[i * 3] = x * Math.cos(angle) - z * Math.sin(angle);
       particlePositions[i * 3 + 2] = x * Math.sin(angle) + z * Math.cos(angle);
     }
     particleSystemRef.current.geometry.attributes.position.needsUpdate = true;
+    
+    // Platform glow pulse
+    const platformScale = 1 + audioData.bass * 0.3;
+    platformRef.current.scale.set(platformScale, 1, platformScale);
+    (platformRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 0.3 + audioData.amplitude * 0.5;
   });
   
   return (
-    <>
-      <mesh ref={meshRef} position={[0, 0, -4]}>
+    <group ref={groupRef} position={[0, -1, -5]}>
+      {/* Platform/Base */}
+      <mesh ref={platformRef} rotation={[-Math.PI / 2, 0, 0]}>
+        <cylinderGeometry attach="geometry" args={[2.5, 2.5, 0.1, 64]} />
+        <meshStandardMaterial
+          attach="material"
+          color="#1e1b4b"
+          emissive="#4c1d95"
+          emissiveIntensity={0.4}
+          roughness={0.4}
+          metalness={0.9}
+        />
+      </mesh>
+      
+      {/* Support columns */}
+      {[0, Math.PI / 2, Math.PI, Math.PI * 1.5].map((angle, i) => (
+        <mesh key={i} position={[
+          Math.cos(angle) * 2,
+          1.5,
+          Math.sin(angle) * 2
+        ]} rotation={[0, 0, angle]}>
+          <cylinderGeometry attach="geometry" args={[0.15, 0.15, 3, 16]} />
+          <meshStandardMaterial
+            attach="material"
+            color="#6b7280"
+            emissive="#8b5cf6"
+            emissiveIntensity={0.3}
+            metalness={0.8}
+            roughness={0.2}
+          />
+        </mesh>
+      ))}
+      
+      {/* Main sphere */}
+      <mesh ref={sphereRef} position={[0, 1.5, 0]}>
         <sphereGeometry attach="geometry" args={[1.2, 64, 64]} />
         <meshStandardMaterial
           attach="material"
@@ -141,12 +186,13 @@ function BeatPulsingSphere({ audioData }: { audioData: AudioData }) {
           emissive="#8b5cf6"
           emissiveIntensity={0.5}
           roughness={0.3}
-          metalness={0.8}
+          metalness={0.9}
           transparent
           opacity={0.95}
         />
       </mesh>
       
+      {/* Particle system */}
       <points ref={particleSystemRef}>
         <bufferGeometry attach="geometry" {...particlesGeometry} />
         <pointsMaterial
@@ -160,31 +206,47 @@ function BeatPulsingSphere({ audioData }: { audioData: AudioData }) {
           sizeAttenuation
         />
       </points>
-    </>
+      
+      {/* Ring around sphere */}
+      <mesh rotation={[Math.PI / 4, 0, 0]}>
+        <torusGeometry attach="geometry" args={[2, 0.05, 16, 100]} />
+        <meshStandardMaterial
+          attach="material"
+          color="#06b6d4"
+          emissive="#06b6d4"
+          emissiveIntensity={0.6}
+          metalness={0.9}
+          roughness={0.1}
+        />
+      </mesh>
+    </group>
   );
 }
 
 function ARScene({ audioData, isPlaying }: { audioData: AudioData; isPlaying: boolean }) {
   return (
     <>
-      <ambientLight intensity={0.4} />
-      <pointLight position={[5, 5, 5]} intensity={1} />
-      <pointLight position={[-5, -5, -5]} intensity={0.5} color="#06b6d4" />
+      <ambientLight intensity={0.5} />
+      <pointLight position={[5, 5, 5]} intensity={1.2} />
+      <pointLight position={[-5, 3, -5]} intensity={0.8} color="#06b6d4" />
+      <pointLight position={[5, 3, -5]} intensity={0.8} color="#8b5cf6" />
       
       {isPlaying ? (
-        <BeatPulsingSphere audioData={audioData} />
+        <FixedStage audioData={audioData} />
       ) : (
-        <mesh position={[0, 0, -4]}>
-          <sphereGeometry attach="geometry" args={[1.2, 32, 32]} />
-          <meshStandardMaterial 
-            attach="material" 
-            color="#6b7280" 
-            emissive="#6b7280" 
-            emissiveIntensity={0.2}
-            transparent
-            opacity={0.5}
-          />
-        </mesh>
+        <group position={[0, -1, -5]}>
+          <mesh position={[0, 1.5, 0]}>
+            <sphereGeometry attach="geometry" args={[1.2, 32, 32]} />
+            <meshStandardMaterial 
+              attach="material" 
+              color="#6b7280" 
+              emissive="#6b7280" 
+              emissiveIntensity={0.2}
+              transparent
+              opacity={0.5}
+            />
+          </mesh>
+        </group>
       )}
     </>
   );
@@ -195,14 +257,49 @@ export function DemoARView() {
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [orientation, setOrientation] = useState<DeviceOrientation | null>(null);
+  const [orientationSupported, setOrientationSupported] = useState<boolean | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioData = useAudioAnalyzer();
+  
+  const handleOrientation = useCallback((event: DeviceOrientationEvent) => {
+    setOrientation({
+      alpha: event.alpha || 0,
+      beta: event.beta || 0,
+      gamma: event.gamma || 0,
+    });
+  }, []);
+  
+  const requestOrientation = useCallback(async () => {
+    // Request device orientation permission (iOS 13+)
+    if (typeof (DeviceOrientationEvent as any).requestPermission === 'function') {
+      try {
+        const permission = await (DeviceOrientationEvent as any).requestPermission();
+        if (permission === 'granted') {
+          window.addEventListener('deviceorientation', handleOrientation);
+          setOrientationSupported(true);
+        } else {
+          setOrientationSupported(false);
+        }
+      } catch (e) {
+        console.error("Orientation permission error:", e);
+        setOrientationSupported(false);
+      }
+    } else {
+      // Non-iOS devices
+      window.addEventListener('deviceorientation', handleOrientation);
+      setOrientationSupported(true);
+    }
+  }, [handleOrientation]);
   
   const startAR = useCallback(async () => {
     setIsStarting(true);
     setError(null);
     
     try {
+      // Request orientation first
+      await requestOrientation();
+      
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { 
           facingMode: "environment",
@@ -227,7 +324,6 @@ export function DemoARView() {
         });
       }
       
-      // Start audio after camera is ready
       setTimeout(() => {
         startBeatMusic();
         setIsStarting(false);
@@ -235,11 +331,11 @@ export function DemoARView() {
       
     } catch (err) {
       console.error("Camera error:", err);
-      setError("Camera access denied. Please allow camera permission in your browser settings.");
+      setError("Camera access denied. Please allow camera permission.");
       setCameraGranted(false);
       setIsStarting(false);
     }
-  }, []);
+  }, [requestOrientation]);
   
   const startBeatMusic = useCallback(() => {
     if (isPlaying) return;
@@ -249,12 +345,10 @@ export function DemoARView() {
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.8;
     
-    // Create a simple beat pattern
     const now = audioContext.currentTime;
     const bpm = 100;
     const beatInterval = 60 / bpm;
     
-    // Bass drum (kick)
     const createKick = (time: number) => {
       const osc = audioContext!.createOscillator();
       const gain = audioContext!.createGain();
@@ -273,7 +367,6 @@ export function DemoARView() {
       osc.stop(time + 0.5);
     };
     
-    // Hi-hat
     const createHat = (time: number) => {
       const bufferSize = audioContext!.sampleRate * 0.1;
       const buffer = audioContext!.createBuffer(1, bufferSize, audioContext!.sampleRate);
@@ -302,7 +395,6 @@ export function DemoARView() {
       noise.start(time);
     };
     
-    // Snare
     const createSnare = (time: number) => {
       const noiseBuffer = audioContext!.createBuffer(1, audioContext!.sampleRate * 0.2, audioContext!.sampleRate);
       const data = noiseBuffer.getChannelData(0);
@@ -330,7 +422,6 @@ export function DemoARView() {
       noise.start(time);
     };
     
-    // Bass line
     const createBass = (time: number, freq: number) => {
       const osc = audioContext!.createOscillator();
       osc.type = "sine";
@@ -348,30 +439,24 @@ export function DemoARView() {
       osc.stop(time + beatInterval);
     };
     
-    // Schedule beats for 30 seconds
     const duration = 30;
     const numBeats = Math.floor(duration / beatInterval);
     
     for (let i = 0; i < numBeats; i++) {
       const beatTime = now + i * beatInterval;
       
-      // Kick on every beat
       createKick(beatTime);
       
-      // Snare on 2 and 4
       if (i % 4 === 2 || i % 4 === 3) {
         createSnare(beatTime);
       }
       
-      // Hi-hat on off-beats
       createHat(beatTime + beatInterval / 2);
       
-      // Bass line (simple progression)
-      const bassFreqs = [110, 110, 130.81, 98]; // A2, A2, C3, G2
+      const bassFreqs = [110, 110, 130.81, 98];
       createBass(beatTime, bassFreqs[i % 4]);
     }
     
-    // Stop after 30 seconds
     setTimeout(() => {
       isPlaying = false;
     }, duration * 1000);
@@ -388,11 +473,12 @@ export function DemoARView() {
       stream.getTracks().forEach(track => track.stop());
       setStream(null);
     }
+    window.removeEventListener('deviceorientation', handleOrientation);
     isPlaying = false;
     setCameraGranted(false);
     setError(null);
     setIsStarting(false);
-  }, [stream]);
+  }, [stream, handleOrientation]);
   
   useEffect(() => {
     return () => {
@@ -402,12 +488,13 @@ export function DemoARView() {
       if (audioContext) {
         audioContext.close();
       }
+      window.removeEventListener('deviceorientation', handleOrientation);
     };
-  }, [stream]);
+  }, [stream, handleOrientation]);
   
   return (
     <div className="relative w-full h-screen bg-black overflow-hidden">
-      {/* Camera Feed - MUST be visible */}
+      {/* Camera Feed */}
       <video
         ref={videoRef}
         autoPlay
@@ -416,17 +503,24 @@ export function DemoARView() {
         className="absolute inset-0 w-full h-full object-cover"
         style={{ 
           display: cameraGranted ? "block" : "none",
-          transform: "scaleX(-1)",
           zIndex: 0
         }}
       />
       
-      {/* 3D AR Overlay */}
+      {/* 3D AR Overlay - Fixed Stage */}
       <div className="absolute inset-0" style={{ zIndex: 1 }}>
         <Canvas
-          camera={{ position: [0, 0, 0], fov: 75 }}
+          camera={{ 
+            position: [0, 0, 0], 
+            fov: 75,
+            rotation: orientation ? {
+              x: (orientation.beta || 0) * Math.PI / 180,
+              y: -(orientation.alpha || 0) * Math.PI / 180,
+              z: -(orientation.gamma || 0) * Math.PI / 180
+            } : undefined
+          }}
           style={{ background: "transparent" }}
-          gl={{ alpha: true, antialias: true, preserveDrawingBuffer: true }}
+          gl={{ alpha: true, antialias: true }}
         >
           <ARScene audioData={audioData} isPlaying={isPlaying} />
         </Canvas>
@@ -438,12 +532,18 @@ export function DemoARView() {
         <div className="absolute top-0 left-0 right-0 p-4 flex items-center justify-between pointer-events-auto">
           <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md rounded-full px-4 py-2">
             <Sparkles className="w-5 h-5 text-violet-400" />
-            <span className="text-white font-semibold">AR Music Demo</span>
+            <span className="text-white font-semibold">AR Stage</span>
           </div>
           {isPlaying && (
             <div className="flex items-center gap-2 bg-black/60 backdrop-blur-md rounded-full px-4 py-2">
               <div className={`w-2 h-2 rounded-full ${audioData.beat ? 'bg-green-400' : 'bg-violet-400'} animate-pulse`} />
-              <span className="text-xs text-violet-300">Beat Active</span>
+              <span className="text-xs text-violet-300">Live</span>
+            </div>
+          )}
+          {orientationSupported && (
+            <div className="flex items-center gap-1 bg-black/60 backdrop-blur-md rounded-full px-3 py-1.5">
+              <Compass className="w-4 h-4 text-zinc-400" />
+              <span className="text-xs text-zinc-400">Fixed</span>
             </div>
           )}
           {cameraGranted && (
@@ -463,9 +563,9 @@ export function DemoARView() {
               <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-violet-600/30 border-2 border-violet-500 flex items-center justify-center">
                 <Camera className="w-10 h-10 text-violet-400" />
               </div>
-              <h2 className="text-xl font-bold text-white mb-2">AR Music Experience</h2>
+              <h2 className="text-xl font-bold text-white mb-2">Fixed AR Stage</h2>
               <p className="text-zinc-400 mb-6 text-sm">
-                A life-size 3D stage that pulses and dances to the beat. In your actual space.
+                A life-size stage anchored in your space. Walk around it. View from any angle.
               </p>
               {error ? (
                 <div className="space-y-3">
@@ -487,9 +587,11 @@ export function DemoARView() {
                   Start AR Experience
                 </Button>
               )}
-              <p className="text-zinc-500 text-xs mt-4">
-                Tap once to enable camera + start music
-              </p>
+              <div className="mt-4 text-zinc-500 text-xs space-y-1">
+                <p>📍 Stage stays fixed in space</p>
+                <p>🚶 Walk around to view from all angles</p>
+                <p>🎵 30-second beat experience</p>
+              </div>
             </div>
           </div>
         )}
@@ -500,7 +602,7 @@ export function DemoARView() {
             <div className="bg-black/80 backdrop-blur-md rounded-xl px-8 py-6 border border-violet-600/40">
               <div className="flex items-center gap-3">
                 <div className="w-3 h-3 rounded-full bg-violet-400 animate-pulse" />
-                <span className="text-white font-medium">Starting AR...</span>
+                <span className="text-white font-medium">Anchoring stage...</span>
               </div>
             </div>
           </div>
@@ -517,18 +619,7 @@ export function DemoARView() {
                 </span>
               </div>
               <div className="w-px h-4 bg-zinc-600" />
-              <div className="flex gap-1">
-                {[...Array(5)].map((_, i) => (
-                  <div
-                    key={i}
-                    className="w-1 bg-violet-400 rounded-full transition-all duration-100"
-                    style={{
-                      height: `${8 + audioData.amplitude * 16 + Math.random() * 8}px`,
-                      opacity: 0.5 + audioData.bass * 0.5
-                    }}
-                  />
-                ))}
-              </div>
+              <span className="text-zinc-400 text-xs">Walk around the stage</span>
             </div>
           </div>
         )}
