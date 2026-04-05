@@ -286,7 +286,8 @@ export function DemoARView() {
       const noise = audioContext!.createBufferSource();
       noise.buffer = buffer;
       
-      const filter = audioContext!.createHighpassFilter();
+      const filter = audioContext!.createBiquadFilter();
+      filter.type = "highpass";
       filter.frequency.value = 8000;
       
       const gain = audioContext!.createGain();
@@ -312,7 +313,8 @@ export function DemoARView() {
       const noise = audioContext!.createBufferSource();
       noise.buffer = noiseBuffer;
       
-      const filter = audioContext!.createBandpassFilter();
+      const filter = audioContext!.createBiquadFilter();
+      filter.type = "bandpass";
       filter.frequency.value = 2000;
       filter.Q.value = 1;
       
