@@ -182,7 +182,8 @@ function AudioReactiveRing({ audioData }: { audioData: AudioData }) {
     
     // Color shift with amplitude
     const hue = (state.clock.elapsedTime * 0.2 + audioData.amplitude) % 1;
-    ringRef.current.material.color.setHSL(hue, 0.8, 0.6);
+    const material = ringRef.current.material as THREE.MeshStandardMaterial;
+    material.color.setHSL(hue, 0.8, 0.6);
   });
   
   return (
