@@ -10,7 +10,7 @@ import { Play, Pause, Camera, Music, Zap, Sparkles } from "lucide-react";
 // Demo audio context and analyser
 let audioContext: AudioContext | null = null;
 let analyser: AnalyserNode | null = null;
-let audioSource: AudioBufferSourceNode | null = null;
+let audioSource: OscillatorNode | null = null;
 let isPlaying = false;
 
 interface AudioData {
