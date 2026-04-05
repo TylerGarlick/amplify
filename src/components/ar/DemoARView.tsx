@@ -64,13 +64,22 @@ function useAudioAnalyzer() {
 function AudioReactiveParticles({ audioData }: { audioData: AudioData }) {
   const particlesRef = useRef<THREE.Points>(null);
   const [particleCount] = useState(500);
+  const velocitiesRef = useRef<Float32Array | null>(null);
   
   // Create particle geometry
   const geometry = new THREE.BufferGeometry();
   const positions = new Float32Array(particleCount * 3);
   const colors = new Float32Array(particleCount * 3);
   const sizes = new Float32Array(particleCount);
-  const velocities = useRef<Float32Array>(particleCount * 3).current;
+  
+  // Initialize velocities once
+  if (!velocitiesRef.current) {
+    velocitiesRef.current = new Float32Array(particleCount * 3);
+    for (let i = 0; i < particleCount * 3; i++) {
+      velocitiesRef.current[i] = (Math.random() - 0.5) * 0.02;
+    }
+  }
+  const velocities = velocitiesRef.current;
   
   // Initialize particles
   for (let i = 0; i < particleCount; i++) {
