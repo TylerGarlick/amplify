@@ -252,6 +252,27 @@ function ARScene({ audioData, isPlaying }: { audioData: AudioData; isPlaying: bo
   );
 }
 
+function CameraController({ orientation }: { orientation: DeviceOrientation | null }) {
+  const { camera } = useThree();
+  
+  useFrame(() => {
+    if (orientation) {
+      // Apply device orientation to camera
+      const alpha = (orientation.alpha || 0) * Math.PI / 180;
+      const beta = (orientation.beta || 0) * Math.PI / 180;
+      const gamma = (orientation.gamma || 0) * Math.PI / 180;
+      
+      camera.rotation.set(
+        beta,
+        -alpha,
+        -gamma
+      );
+    }
+  });
+  
+  return null;
+}
+
 export function DemoARView() {
   const [cameraGranted, setCameraGranted] = useState<boolean | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -512,16 +533,12 @@ export function DemoARView() {
         <Canvas
           camera={{ 
             position: [0, 0, 0], 
-            fov: 75,
-            rotation: orientation ? {
-              x: (orientation.beta || 0) * Math.PI / 180,
-              y: -(orientation.alpha || 0) * Math.PI / 180,
-              z: -(orientation.gamma || 0) * Math.PI / 180
-            } : undefined
+            fov: 75
           }}
           style={{ background: "transparent" }}
           gl={{ alpha: true, antialias: true }}
         >
+          <CameraController orientation={orientation} />
           <ARScene audioData={audioData} isPlaying={isPlaying} />
         </Canvas>
       </div>
